@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIG Hacking Toolkit - Comprehensive Analyzer</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e2f; color: white; margin: 20px;}
+        .container { max-width: 900px; margin: auto; background: #282c3e; padding: 30px; border-radius: 15px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);}
+        h1 { color: #61dafb; text-align: center; margin-bottom: 30px;}
+        label { display: block; margin-top: 15px; font-weight: bold; color: #b0bec5;}
+        select, input[type="text"], textarea {
+            width: 98%; padding: 10px; margin-top: 5px; border: 1px solid #4a4e69; border-radius: 5px; background-color: #3a3f5c; color: white; box-sizing: border-box;
+        }
+        .input-group { margin-bottom: 20px; padding: 15px; border: 1px solid #4a4e69; border-radius: 8px; background-color: #3a3f5c;}
+        button {
+            background-color: #ff6b6b; color: white; padding: 12px 20px; border: none; border-radius: 7px; cursor: pointer; font-size: 1.1em; margin-top: 20px; transition: background-color 0.3s;
+        }
+        button:hover { background-color: #ff8a8a; }
+
+        #resultsContainer { margin-top: 30px; padding: 20px; border: 1px solid #61dafb; border-radius: 10px; background-color: #21252b;}
+        .result-card { border: 1px dashed #4a4e69; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+        .success { background-color: #38a16920; color: #4CAF50; }
+        .fail { background-color: #f5656520; color: #E74C3C; }
+        .error { background-color: #f6ad5520; color: #F39C12; }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ DIG Hacking Toolkit Dashboard</h1>
+
+        <!-- TARGET INPUT FIELD -->
+        <div class="input-group" style="background-color:#5c678a;">
+            <label for="targetUrl" style="color:white;">🎯 Target Website URL:</label>
+            <input type="text" id="targetUrl" value="https://topupkaisar.com/" placeholder="Enter the base URL of the site to attack (e.g., https://example.com/)" onchange="updateParameters()">
+        </div>
+
+        <!-- Input Selection -->
+        <div class="input-group">
+            <label for="attackType">1. Select Attack Vector:</label>
+            <select id="attackType" onchange="updateParameters()">
+                <option value="">-- Pilih Serangan --</option>
+                <option value="SQLi">SQL Injection (Database)</option>
+                <option value="XSS">Cross-Site Scripting (Input Field)</option>
+                <option value="BruteForce">Brute Force Login (Kombinasi User/Pass)</option>
+            </select>
+        </div>
+
+        <!-- Parameter Inputs -->
+        <div id="parameterInputs" class="input-group">
+            <!-- Dynamic fields load here -->
+        </div>
+
+        <!-- Payload Input (Optional/Fallback) -->
+        <div class="input-group">
+            <label for="payloads_manual" style="color:yellow;">3. Manual Payloads Override (Opsional):</label>
+            <textarea id="payloads_manual" rows="4" placeholder="Biarkan kosong untuk menggunakan payload default dari alat."></textarea>
+        </div>
+
+        <!-- Button -->
+        <button onclick="runScan()">🚀 Execute Attack Scan</button>
+
+        <!-- Output Section -->
+        <div id="resultsContainer">
+            <h2>🏴‍☠️ Scan Results</h2>
+            <p id="initialMessage">Klik 'Execute Attack Scan' untuk memulai pengujian.</p>
+        </div>
+    </div>
+
+<script>
+    // --- JavaScript Logic for Interactivity ---
+
+    function updateParameters() {
+        const attackType = document.getElementById('attackType').value;
+        const paramInputsDiv = document.getElementById('parameterInputs');
+        let html = '';
+
+        if (attackType === 'SQLi') {
+            html += `
+                <label for="paramName" style="color:lightblue;">Parameter Rawan (e.g., id, user, search):</label>
+                <input type="text" id="paramName" value="id">
+                <p style="font-size: 0.9em; color: #aaa;">* Parameter URL yang diinjeksikan.</p>
+            `;
+        } else if (attackType === 'XSS') {
+             html += `
+                <label for="fieldName" style="color:lightblue;">Nama Field Rawan:</label>
+                <input type="text" id="fieldName" value="comment">
+                <p style="font-size: 0.9em; color: #aaa;">* Nama field yang diuji (untuk POST/GET).</p>
+            `;
+        } else if (attackType === 'BruteForce') {
+             html += `
+                <label for="loginEndpoint" style="color:lightblue;">Endpoint Login Target:</label>
+                <input type="text" id="loginEndpoint" value="/admin/login?username=&amp;password="><p style="font-size: 0.9em; color: #aaa;">* URL spesifik untuk login (gunakan placeholder ?username=X&amp;amp;password=Y).</p>
+            `;
+        } else {
+            html += '<p style="color:#ccc;">Tidak ada parameter khusus yang dibutuhkan untuk serangan ini.</p>';
+        }
+
+        paramInputsDiv.innerHTML = html;
+    }
+
+    async function runScan() {
+        const attackType = document.getElementById('attackType').value;
+        // Mengutamakan manual input jika diisi, jika tidak, dibiarkan kosong untuk default system
+        const payloadsManual = document.getElementById('payloads_manual').value; 
+        let parameters = {};
+
+        if (attackType === 'SQLi') {
+            parameters.parameter = document.getElementById('paramName').value;
+        } else if (attackType === 'XSS') {
+             parameters.field = document.getElementById('fieldName').value;
+        } else if (attackType === 'BruteForce') {
+             // Untuk brute force, kita tidak perlu parameter tambahan karena list sudah di backend
+             parameters = {};
+        }
+
+        const targetUrl = document.getElementById('targetUrl').value;
+
+        // Bangun objek data yang akan dikirim ke server
+        const dataToSend = {
+            targetUrl: targetUrl,
+            attackType: attackType,
+            parameters: parameters,
+            payloads: payloadsManual ? "MANUAL_OVERRIDE" : null 
+        };
+
+        document.getElementById('initialMessage').innerHTML = '<span style="color:#ffeb3b;">[START] Menjalankan pengujian... Tunggu hasil!</span>';
+
+        try {
+            const response = await fetch('/api/scan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(dataToSend)
+            });
+
+            const result = await response.json();
+            displayResults(result);
+
+        } catch (error) {
+            document.getElementById('initialMessage').innerHTML = `<p class="error">Gagal menghubungkan ke server backend: ${error}</p>`;
+        }
+    }
+
+    function displayResults(data) {
+        const resultsContainer = document.getElementById('resultsContainer');
+        let htmlContent = '';
+
+        if (data.error) {
+            htmlContent = `<p class="error">ERROR: ${data.error}</p>`;
+        } else if (!data.success) {
+             htmlContent = `<p class="error">SCAN FAILED: Unknown error during scan.</p>`;
+        }
+        else {
+            let resultHtml = '<h3>Detailed Findings:</h3>';
+            data.results.forEach(res => {
+                let statusClass = '';
+                if (res.status.includes('SUCCESS')) {
+                    statusClass = 'success';
+                } else if (res.status.includes('FAIL')) {
+                    statusClass = 'fail';
+                } else {
+                    statusClass = 'error';
+                }
+
+                resultHtml += `
+                    <div class="result-card ${statusClass}">
+                        <strong>Payload Used:</strong> ${res.payload}
+
+                        <strong>Status:</strong> ${res.status}
+
+                        <strong>Details/Excerpt:</strong> ${res.data ? res.data : 'N/A'}
+                    </div>`;
+            });
+            resultHtml += '';
+            htmlContent = resultHtml;
+        }
+
+        document.getElementById('initialMessage').innerHTML = ''; // Clear initial message
+        resultsContainer.innerHTML = `<h2>🏴‍☠️ Scan Results</h2>${htmlContent}`;
+    }
+
+    window.onload = updateParameters;
+</script>
+</body>
+</html>
