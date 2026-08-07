@@ -1,2 +1,3 @@
 flask
 requests
+gunicorn  # Paling penting untuk deployment produksi di VPS/Cloud
