@@ -7,6 +7,8 @@ import random
 import requests 
 from concurrent.futures import ThreadPoolExecutor
 
+app = Flask(__name__)
+
 # --- CORE ATTACK MODULES ---
 
 class DDOSAttacker:
