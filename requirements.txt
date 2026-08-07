@@ -1,2 +1,7 @@
-Flask
-request
+fastapi
+uvicorn[standard]
+httpx
+python-multipart  # Good practice if you expand to handle form uploads later
+pydantic
+Jinja2
+# If you start using Jinja2 explicitly in the fallback template rendering, add it here.
